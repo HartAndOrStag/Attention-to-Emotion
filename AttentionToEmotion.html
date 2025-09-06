@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Attention to Emotion</title>
+    <script src="https://unpkg.com/jspsych@8.2.2"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.1.0"></script>
+    <link href="https://unpkg.com/jspsych@8.2.2/css/jspsych.css" rel="stylesheet" type="text/css" />
+  </head>
+  <body></body>
+  <script>
+
+// initialize jsPsych
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        jsPsych.data.displayData();
+    }
+});
+
+// make timeline
+let timeline = [];
+
+// define number of trials as a multiple of 2
+const numTrials = 40;
+
+// define lists of words as either neutral or emotionally charged
+const words = {
+    neutral: [
+        'Chair', 'Window', 'Paper', 'Bottle',
+        'Road', 'Clock', 'Envelope', 'Stone',
+        'Shelf', 'Curtain', 'Table', 'Lamp',
+        'Basket', 'Pencil', 'Door', 'Spoon',
+        'Bench', 'Wall', 'Book', 'Cup',
+    ],
+    charged: [
+        'Died', 'Poverty', 'Failure', 'Pain',
+        'Cruelty', 'Betrayal', 'Starve', 'Doom',
+        'Prison', 'Hurt', 'Rage', 'Hatred',
+        'Guilt', 'War', 'Despair', 'Violence',
+        'Hostage', 'Injury', 'Murder', 'Abuse'
+    ],
+
+};
+
+// define instructions for task
+const instructions = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+    <p><strong>Welcome to the Attention to Emotion task</strong></p>
+    <br></br>
+    <p>Each trial you will be shown a fixation cross followed by
+    <br> a brief view of two digits on either side of a word.</p>
+    <p>Your goal is to determine parity of the two digits
+    <br>i.e. both digits are odd or both digits are even.
+    <br>You will be timed so please make your decision as fast as possible.</p>
+    <p>If there is a match, meaning both odd or both even (press "a").
+    <br>If there is a mismatch, meaning one odd and the other even (press "l").</p>
+    <p>The word in the center is irrelevant and should be ignored.</p>
+    <br></br>
+    <p>Press any Key to Begin</p>
+    `,
+};
+
+// define fixation cross trial for 1000 ms
+const fixation = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<div style="font-size:48px;">+</div>`,
+    choices: "NO_KEYS",
+    trial_duration: 1000,
+};
+
+// define trial for main stimulus and track data
+const mainTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: jsPsych.timelineVariable('mainTrial'),
+    stimulus_duration: 150,
+    choices: ['a', 'l'],
+    data: {
+    wordType: jsPsych.timelineVariable('wordType'),
+    digitParity: jsPsych.timelineVariable('digitParity')
+    },
+    on_finish: function(data) {
+    data.correct = (data.digitParity === 'match' && data.response === 'a') ||
+                   (data.digitParity === 'mismatch' && data.response === 'l');
+    },
+};
+
+// loop to set up neutral and emotionally charged trials in equal amounts
+for (let i = 0; i < numTrials; ++i){
+
+    // randomize digits
+    let digit1 = jsPsych.randomization.randomInt(1, 9),
+    digit2 = jsPsych.randomization.randomInt(1, 9),
+    digitParity = '';
+
+    // determine parity of digits
+    if (digit1 % 2 === 0 && digit2 % 2 === 0 ||
+        digit1 % 2 === 1 && digit2 % 2 === 1){
+        digitParity = 'match';
+    }
+    else {
+        digitParity = 'mismatch';
+    }
+
+    // push fixation and neutral stimulus trial to timeline
+    if (i % 2 === 0) {
+        timeline.push({
+        timeline: [fixation, mainTrial],
+        timeline_variables: [{
+            mainTrial: `<div style="
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-size: 32px;
+                    gap: 40px;">
+                    <span>${digit1}</span>
+                    <span>${jsPsych.randomization.sampleWithoutReplacement(words.neutral, 1)[0]}</span>
+                    <span>${digit2}</span>
+                    </div>`,
+            wordType: 'neutral',
+            digitParity: digitParity,
+            }]
+        });
+    }
+    // push fixation and charged stimulus trial to timeline
+    else {
+        timeline.push({
+        timeline: [fixation, mainTrial],
+        timeline_variables: [{
+            mainTrial: `<div style="
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-size: 32px;
+                    gap: 40px;">
+                    <span>${digit1}</span>
+                    <span>${jsPsych.randomization.sampleWithoutReplacement(words.charged, 1)[0]}</span>
+                    <span>${digit2}</span>
+                    </div>`,
+            wordType: 'charged',
+            digitParity: digitParity,
+            }]
+        });
+    }
+};
+
+// shuffle timeline so that trials appear in random order
+timeline = jsPsych.randomization.shuffle(timeline);
+
+// define end-screen summary
+const summary = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+
+    // calculate average response time of each word type
+    const avgResponseTime = (wordType) => {
+      const rtData = jsPsych.data.get().filter({ wordType }).select('rt').values;
+      return rtData.length ? (rtData.reduce((total, curr) => total + curr, 0) / rtData.length).toFixed(2) : 'N/A';
+    };
+
+    // calculate average correct of each word type
+    const avgCorrect = (wordType) => {
+      const correctData = jsPsych.data.get().filter({ wordType }).select('correct').values;
+      return correctData.length ? ((correctData.filter(isCorrect => isCorrect).length / correctData.length) * 100).toFixed(2) + '%' : 'N/A';
+    };
+
+    // display average response time and average correct for each word type
+    return `
+      <p>Task Complete!</p>
+      <p><strong>Average Response Times:</strong></p>
+      <p>Neutral: ${avgResponseTime('neutral')} ms</p>
+      <p>Emotionally Charged: ${avgResponseTime('charged')} ms</p><br>
+      <p><strong>Accuracy:</strong></p>
+      <p>Neutral: ${avgCorrect('neutral')}</p>
+      <p>Emotionally Charged: ${avgCorrect('charged')}</p><br>
+      <p>Press any key to exit.</p>`;
+  },
+}
+
+// run timeline with instructions in front and summary in back
+jsPsych.run([instructions, ...timeline, summary]);
+
+
+  </script>
+</html>
